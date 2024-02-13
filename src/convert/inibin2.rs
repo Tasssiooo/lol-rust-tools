@@ -4,14 +4,14 @@ use std::io::{stderr, BufReader, Read, Result, Seek, SeekFrom, Write};
 
 pub fn read_2(
     buffer: &mut BufReader<File>,
-    target: &mut HashMap<String, Vec<HashMap<u32, Vec<u32>>>>,
+    target: &mut HashMap<String, HashMap<u32, Vec<String>>>,
 ) {
     fn read_numbers(
         buffer: &mut BufReader<File>,
         fmt: &str,
         count: usize,
         mul: f32,
-    ) -> HashMap<u32, Vec<u32>> {
+    ) -> HashMap<u32, Vec<String>> {
         let mut result = HashMap::new();
 
         let num = {
@@ -30,31 +30,33 @@ pub fn read_2(
         for x in 0..num {
             let mut tmp = Vec::with_capacity(count);
             for _ in 0..count {
+                let mut is_float: f32 = 0.0;
                 /* TODO: Needs optimization */
                 let val = match fmt {
                     "<i" => {
                         let mut i32_buf = [0; 4];
-                        buffer.read(&mut i32_buf).expect("H1!");
+                        buffer.read(&mut i32_buf).unwrap();
                         i32::from_le_bytes(i32_buf) as u32
                     }
                     "<f" => {
                         let mut f32_buf = [0; 4];
-                        buffer.read(&mut f32_buf).expect("H1!");
-                        f32::from_le_bytes(f32_buf) as u32
+                        buffer.read(&mut f32_buf).unwrap();
+                        is_float = f32::from_le_bytes(f32_buf);
+                        0
                     }
                     "<B" => {
                         let mut u8_buf = [0; 1];
-                        buffer.read(&mut u8_buf).expect("H1!");
+                        buffer.read(&mut u8_buf).unwrap();
                         u8::from_le_bytes(u8_buf) as u32
                     }
                     "<h" => {
                         let mut i16_buf = [0; 2];
-                        buffer.read(&mut i16_buf).expect("H1!");
+                        buffer.read(&mut i16_buf).unwrap();
                         i16::from_le_bytes(i16_buf) as u32
                     }
                     "<q" => {
                         let mut i64_buf = [0; 8];
-                        buffer.read(&mut i64_buf).expect("H1!");
+                        buffer.read(&mut i64_buf).unwrap();
                         i64::from_le_bytes(i64_buf) as u32
                     }
                     "<H" => {
@@ -64,13 +66,17 @@ pub fn read_2(
                     }
                     _ => panic!("Unsupported format"),
                 };
-                tmp.push(val * mul as u32);
+                if is_float != 0.0 {
+                    tmp.push((is_float * mul).to_string());
+                } else {
+                    tmp.push((val * mul as u32).to_string());
+                }
             }
             result.insert(keys[x as usize], tmp);
         }
         result
     }
-    fn read_bools(buffer: &mut BufReader<File>) -> HashMap<u32, Vec<u32>> {
+    fn read_bools(buffer: &mut BufReader<File>) -> HashMap<u32, Vec<String>> {
         let mut result = HashMap::new();
 
         let num = {
@@ -94,12 +100,12 @@ pub fn read_2(
 
         for x in 0..num {
             let index = (x / 8) as usize;
-            let value = vec![((bools[index] >> (x % 8)) & 1) as u32];
+            let value = vec![(((bools[index] >> (x % 8)) & 1) as u32).to_string()];
             result.insert(keys[x as usize], value);
         }
         result
     }
-    fn read_strings(buffer: &mut BufReader<File>, len: u16) -> HashMap<u32, Vec<u32>> {
+    fn read_strings(buffer: &mut BufReader<File>, len: u16) -> HashMap<u32, Vec<String>> {
         let mut result = HashMap::new();
 
         let offsets = read_numbers(buffer, "<H", 1, 1.0);
@@ -109,15 +115,15 @@ pub fn read_2(
         assert_eq!(data.len(), len.into());
 
         for (key, offset) in offsets {
-            let mut o = offset[0] as usize;
-            let mut t = Vec::new();
+            let mut o = offset[0].parse::<u32>().unwrap() as usize;
+            let mut t = String::new();
 
             while data[o] != 0 {
-                t.push(data[o] as u32);
+                t.push(data[o] as char);
                 o += 1;
             }
 
-            result.insert(key, t);
+            result.insert(key, vec![t]);
         }
         result
     }
@@ -192,14 +198,16 @@ pub fn read_2(
         }
     }
 
-    target.insert(String::from("UNKNOWN_HASHES"), val);
+    target.insert(String::from("UNKNOWN_HASHES"), val.into_iter().flat_map(|x| {
+        x
+    }).collect());
 }
 
 pub fn read_1(_buffer: &mut BufReader<File>) -> Result<()> {
     Ok(())
 }
 
-pub fn read(mut buffer: BufReader<File>) -> HashMap<String, Vec<HashMap<u32, Vec<u32>>>> {
+pub fn read(mut buffer: BufReader<File>) -> HashMap<String, HashMap<u32, Vec<String>>> {
     let mut result = HashMap::new();
 
     let version = {
