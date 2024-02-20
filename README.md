@@ -1,6 +1,6 @@
 # lol-rust-tools
 
-Scripts to read and convert League file formats, but rewritten in Rust :)) 
+Scripts to read and convert League file formats made by [moonshadow565](https://github.com/moonshadow565/lolpytools), but rewritten in Rust :)) 
 
 Supported formats:
 
